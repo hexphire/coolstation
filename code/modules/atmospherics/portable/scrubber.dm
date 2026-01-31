@@ -13,11 +13,85 @@
 	desc = "A device which filters out harmful air from an area."
 	hint = "drag and drop onto your person to remove the internal chem tank(changing the filter)"
 	p_class = 1.5
-
+	var/net_id = null
+	var/frequency = FREQ_WLNET
 
 	//for smoke
 	var/drain_min = 5
 	var/drain_max = 12
+
+/obj/machinery/portable_atmospherics/scrubber/New()
+	..()
+	src.net_id = generate_net_id(src)
+	MAKE_DEFAULT_RADIO_PACKET_COMPONENT("wireless", frequency)
+
+/obj/machinery/portable_atmospherics/scrubber/receive_signal(datum/signal/signal)
+	if(!signal)
+		return
+
+	var/sender = signal.data["sender"]
+	if(!signal || signal.encryption || !sender)
+		return
+
+	if(signal.data["address_1"] == src.net_id)
+		var/datum/signal/reply = get_free_signal()
+		signal.transmission_method = 1
+		reply.source = src
+		reply.data["sender"] = src.net_id
+		reply.data["address_1"] = sender
+		switch (lowertext(signal.data["command"]))
+			if ("help")
+				if (!signal.data["topic"])
+					reply.data["description"] = "Air Scrubber"
+					reply.data["topics"] = "Status,on,off,,lock,unlock"
+				else
+					reply.data["topic"] = signal.data["topic"]
+					switch (lowertext(signal.data["topic"]))
+						if ("status")
+							reply.data["description"] = "Returns the status of the Air Scrubber. No arguments"
+						if ("on")
+							reply.data["description"] = "Activates the air scrubber"
+							reply.data["args"] = "pass"
+						if ("off")
+							reply.data["description"] = "Deactivates the air scrubber"
+							reply.data["args"] = "pass"
+						if ("set_flow")
+							reply.data["description"] = "Sets the inlet flow rate of the air scrubber"
+							reply.data["args"] = "(0-100)"
+						else
+							reply.data["description"] = "ERROR: UNKNOWN TOPIC"
+			if ("status")
+				reply.data["command"] = "ack"
+				reply.data["message"] = "power=[on]&flow=[inlet_flow]"
+
+			if ("on")
+				on = TRUE
+				src.update_icon()
+				reply.data["command"] = "ack"
+			if ("off")
+				on = FALSE
+				src.update_icon()
+				reply.data["command"] = "ack"
+			if ("set_flow")
+				var/new_flow = text2num(signal.data["data"])
+				inlet_flow = min(100, max(0, new_flow))
+				reply.data["command"] = "ack"
+				reply.data["flow"] = inlet_flow
+			else
+				return
+
+		SEND_SIGNAL(src, COMSIG_MOVABLE_POST_RADIO_PACKET, reply, 5, "wireless")
+
+	else if (signal.data["address_1"] == "ping")
+		var/datum/signal/reply = get_free_signal()
+		reply.source = src
+		reply.data["address_1"] = sender
+		reply.data["command"] = "ping_reply"
+		reply.data["device"] = "PORTABLE_AIR_SCRUBBER"
+		reply.data["netid"] = src.net_id
+
+		SEND_SIGNAL(src, COMSIG_MOVABLE_POST_RADIO_PACKET, reply, 5, "wireless")
+		return
 
 /obj/machinery/portable_atmospherics/scrubber/update_icon()
 	if(on)
