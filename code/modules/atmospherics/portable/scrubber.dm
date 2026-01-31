@@ -62,7 +62,9 @@
 							reply.data["description"] = "ERROR: UNKNOWN TOPIC"
 			if ("status")
 				reply.data["command"] = "ack"
-				reply.data["message"] = "power=[on]&flow=[inlet_flow]"
+				reply.data["power"] = on
+				reply.data["flow"] = inlet_flow
+
 
 			if ("on")
 				on = TRUE
